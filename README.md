@@ -1,6 +1,7 @@
 We implemented multiple cryptographic algorithms such as AES, RSA, RC4, ..etc.
 
 <b>Algorithms</b>
+
 In the securitylibrary folder, you'll find:
 
 	- MainAlgorithms Folder:
@@ -27,4 +28,5 @@ In the securitylibrary folder, you'll find:
 In the securitypackagetest, you'll find all the test files for the previously mentioned algorithms.
 
 <b>How to open/run them:</b>
+
 All you need is to open the SecurityPackage.sln in Visual Studio and run the tests!
