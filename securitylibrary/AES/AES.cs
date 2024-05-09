@@ -11,9 +11,55 @@ namespace SecurityLibrary.AES
     /// </summary>
     public class AES : CryptographicTechnique
     {
-      
+        #region Mix Column functions
+        public static string[,] iMixColumn(string[,] stateArray)
+        {
+            string[,] result = new string[4, 4];
 
+            for (int col = 0; col < 4; col++)
+            {
+                for (int row = 0; row < 4; row++)
+                {
+                    int value = 0;
+                    for (int i = 0; i < 4; i++)
+                    {
+                        int stateVal = Convert.ToInt32(stateArray[i, col], 16);
+                        int matrixVal = Convert.ToInt32(iMixColumnMatrix[row, i], 16);
+                        int product = galoisMultiplication(stateVal, matrixVal);
+                        value ^= product;
+                    }
+                    result[row, col] = value.ToString("X2");
+                }
+            }
 
+            return result;
+        }
+
+        public static int galoisMultiplication(int a, int b)
+        {
+            int p = 0;
+            for (int counter = 0; counter < 8; counter++)
+            {
+                if ((b & 1) != 0)
+                {
+                    p ^= a;
+                }
+
+                bool hiBitSet = (a & 0x80) != 0;
+                a <<= 1;
+
+                if (hiBitSet)
+                {
+                    a ^= 0x1b; 
+                }
+
+                b >>= 1;
+            }
+            return p;
+        }
+        #endregion
+
+        #region S-Box and Inverse S-Box
         public static string[] SBOX = {
             "63", "7C", "77", "7B", "F2", "6B", "6F", "C5", "30", "01", "67", "2B", "FE", "D7", "AB", "76",
             "CA", "82", "C9", "7D", "FA", "59", "47", "F0", "AD", "D4", "A2", "AF", "9C", "A4", "72", "C0",
@@ -51,6 +97,7 @@ namespace SecurityLibrary.AES
             "A0", "E0", "3B", "4D", "AE", "2A", "F5", "B0", "C8", "EB", "BB", "3C", "83", "53", "99", "61",
             "17", "2B", "04", "7E", "BA", "77", "D6", "26", "E1", "69", "14", "63", "55", "21", "0C", "7D"
         };
+        #endregion
 
         public static string[,] constantRound = {
             { "01", "02", "04", "08", "10", "20", "40", "80", "1B", "36" },
@@ -59,6 +106,7 @@ namespace SecurityLibrary.AES
             { "00", "00", "00", "00", "00", "00", "00", "00", "00", "00" }
         };
 
+        #region MixColumns Inverse MixColumns
         public static string[,] mixColumnMatrix = {
             { "02", "03", "01", "01" },
             { "01", "02", "03", "01" },
@@ -73,8 +121,110 @@ namespace SecurityLibrary.AES
             { "0B", "0D", "09", "0E" }
         };
 
-        public struct hexToDecimal
+
+        #endregion
+
+        #region Number Representation
+        static string BinXOR(string binary1, string binary2)
         {
+            string res = "";
+            if (binary1 != "" && binary2 != "")
+            {
+                for (int i = 0; i < 8; i++)
+                    res += binary1[i] == binary2[i] ? '0' : '1';
+            }
+            else if (binary1 == "")
+                res = binary2;
+            else if (binary2 == "")
+                res = binary1;
+            return res;
+        }
+        static string HextoBin(string x)
+        {
+            x = Convert.ToString(Convert.ToInt32(x.ToString(), 16), 2).PadLeft(8, '0');
+            return x;
+        }
+        static string BintoHex(string x)
+        {
+            x = Convert.ToString(Convert.ToInt32(x.ToString(), 2), 16);
+            return x;
+        }
+
+        static String Shift_1B(string bin)//shift left and xor with 1B
+        {
+            if (bin[0] == '0')
+            {
+                return bin.Remove(0, 1) + "0";
+            }
+            else
+            {
+                return BinXOR((bin.Remove(0, 1) + "0"), HextoBin("1B"));
+            }
+        }
+        #endregion
+
+        #region Binary Multiplication
+        static string _09(string bin)//bin×09=(((bin×2)×2)×2)+bin
+        {
+            string res = BinXOR(Shift_1B(Shift_1B(Shift_1B(bin))), bin);
+            return res;
+        }
+        static string _0B(string bin)//bin×0B=((((bin×2)×2)+bin)×2)+bin
+        {
+            string res = BinXOR(Shift_1B(BinXOR(Shift_1B(Shift_1B(bin)), bin)), bin);
+            return res;
+        }
+        static string _0D(string bin)//bin×0D=((((bin×2)+bin)×2)×2)+bin
+        {
+            string res = BinXOR(Shift_1B(Shift_1B(BinXOR(Shift_1B(bin), bin))), bin);
+            return res;
+
+        }
+        static string _0E(string bin)//bin×0E=((((bin×2)+bin)×2)+bin)×2
+        {
+            string res = Shift_1B(BinXOR(Shift_1B(BinXOR(Shift_1B(bin), bin)), bin));
+            return res;
+
+        }
+        #endregion
+        private string[,] InvMixColumns(string[,] matrix)
+        {
+            string[,] mixed = { { "", "", "", "" }, { "", "", "", "" }, { "", "", "", "" }, { "", "", "", "" } };
+            for (int i = 0; i < 4; i++)
+            {
+                for (int j = 0; j < 4; j++)
+                {
+                    for (int k = 0; k < 4; k++)
+                    {
+                        StringBuilder binary1 = new StringBuilder(HextoBin(matrix[k, j]));
+                        string res = "";
+                        if (iMixColumnMatrix[i, k].Equals("09", StringComparison.OrdinalIgnoreCase))
+                        {
+                            res = _09(binary1.ToString());
+                        }
+                        else if (iMixColumnMatrix[i, k].Equals("0B", StringComparison.OrdinalIgnoreCase))
+                        {
+                            res = _0B(binary1.ToString());
+                        }
+                        else if (iMixColumnMatrix[i, k].Equals("0D", StringComparison.OrdinalIgnoreCase))
+                        {
+                            res = _0D(binary1.ToString());
+                        }
+                        else if (iMixColumnMatrix[i, k].Equals("0E", StringComparison.OrdinalIgnoreCase))
+                        {
+                            res = _0E(binary1.ToString());
+                        }
+                        mixed[i, j] = BinXOR(mixed[i, j].PadLeft(8, '0'), res);
+                        if (k == 3)
+                        {
+                            mixed[i, j] = BintoHex(mixed[i, j]).PadLeft(2, '0').ToUpper();
+                        }
+                    }
+                }
+            }
+            return mixed;
+        }
+        public struct hexToDecimal {
             public string hexa;
             public int deci;
         }
@@ -95,8 +245,10 @@ namespace SecurityLibrary.AES
             string[,] initKeyMatrix = new string[4, 4];
             string[,] keyMatrix = new string[4, 4];
             string[] keyColumn = new string[4];
+
             string[,] SBOXMatrix = new string[16, 16];
             string[,] iSBOXMatrix = new string[16, 16];
+
             string[,] fullKeyMatrix = new string[4, 40];
             string[,] newFullKeyMatrix = new string[4, 44];
             string[,] updatedKeyMatrix = new string[4, 4];
@@ -106,6 +258,7 @@ namespace SecurityLibrary.AES
             string cipher = "";
             string[] cipherArr = new string[cipherText.Length];
             string[,] mulMatrix = new string[4, 4];
+            string[,] trans = new string[4, 4];
 
 
             for (i = 0; i < 4; i++)
@@ -115,10 +268,10 @@ namespace SecurityLibrary.AES
                     keyMatrix[j, i] = key.Substring(idx + 2, 2);
                     initKeyMatrix[j, i] = key.Substring(idx + 2, 2);
                     idx += 2;
-
+        
                 }
             }
-
+            #region Key Expansion
             // Key Expansion
             for (k = 0; k < 10; k++)
             {
@@ -128,6 +281,7 @@ namespace SecurityLibrary.AES
                     keyColumn[i] = keyMatrix[i, 3];
                 }
 
+                // Column Rotation
                 idx = 3;
                 nextTmp = keyColumn[3];
                 for (i = 3; i >= 0; i--)
@@ -235,9 +389,14 @@ namespace SecurityLibrary.AES
                 if (indx == 40)
                     break;
             }
+            #endregion
+
+
+            // Adding the initial key to W (Forming the Full Expanded Key Matrix)
             int flag = 0, c = 0, indexx = 0;
-            for (i = 0; i < 44; i++)
+            for (i = 0; i < 40; i++)
             {
+
                 for (j = 0; j < 4; j++)
                 {
                     if (i < 4 && flag == 0)
@@ -252,11 +411,11 @@ namespace SecurityLibrary.AES
                             flag = 1;
                             i = 0;
                         }
-                        if (i < 40)
                             newFullKeyMatrix[j, indexx] = fullKeyMatrix[j, i];
-
                     }
+
                 }
+
                 indexx++;
             }
             ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -271,21 +430,23 @@ namespace SecurityLibrary.AES
                 }
             }
 
-            // State Array (initial key matrix XOR plaintext)
+            // State Array (last 4 words XOR ciphertext)
             int stateXORValue;
-            int indxx = 43;
+            int indxx = 40;
             for (i = 0; i < 4; i++)
             {
                 for (j = 0; j < 4; j++)
                 {
-                    stateXORValue = (Convert.ToInt32(plainMatrix[j, i], 16)) ^ (Convert.ToInt32(newFullKeyMatrix[j, indxx], 16));
+                    stateXORValue = (Convert.ToInt32(plainMatrix[j, i], 16)) ^ (Convert.ToInt32(newFullKeyMatrix[j,indxx], 16));
                     stateArray[j, i] = stateXORValue.ToString("X");
 
                     if (stateArray[j, i].Length == 1)
                         stateArray[j, i] = "0" + stateArray[j, i];
                 }
-                indxx--;
+                indxx++;
             }
+
+            indxx = 39;
 
             for (i = 0; i < 4; i++)
             {
@@ -297,7 +458,7 @@ namespace SecurityLibrary.AES
 
             for (x = 0; x < 10; x++)
             {
-
+                #region SBOX
                 // Byte Substitution (SBOX)
                 string ind1_1, ind2_1;
                 int idx1_1 = 0, idx2_1 = 0;
@@ -330,15 +491,20 @@ namespace SecurityLibrary.AES
                         idx2_1 = idx2_1 % 16;
 
                         prevStateArray[j, i] = iSBOXMatrix[idx1_1, idx2_1];
+                       // Console.WriteLine(prevStateArray[j, i]);
                     }
 
                 }
+                #endregion 
 
+                Console.WriteLine($"\nround {x}^\n");
+
+                #region Shift Rows Right
                 // Shift Rows
                 string tmp_1, nextTmp_1;
                 idx = 0;
                 int flag1 = 0, flag2 = 0, count = 0;
-                nextTmp_1 = prevStateArray[1, 0];
+        
                 for (i = 1; i < 4; i++)
                 {
                     if (i == 2)
@@ -360,13 +526,12 @@ namespace SecurityLibrary.AES
                         if (idx + 1 > 4)
 
                             idx = (idx + 1) % 4;
-
+                 
                         tmp_1 = prevStateArray[i, idx];
                         prevStateArray[i, idx] = nextTmp_1;
                         nextTmp_1 = tmp_1;
-
                     }
-
+                    
                     if (i == 2 && count > 1 && flag1 == 1)
                     {
                         flag1 = 0;
@@ -379,21 +544,64 @@ namespace SecurityLibrary.AES
                     else if (i == 3 && flag2 == 0)
                         i = 2;
                 }
-                
+                #endregion
+                int z, w;
+                for( z = 0; z < 4; z++)
+                {
+                    for ( w = 0; w < 4; w++)
+                    {
 
+                        Console.WriteLine($"shift row: {prevStateArray[z, w]}");
+                    }
+                }
+
+                // ADD Round Key
+                Console.WriteLine("\nround key:\n");
                 int XOR;
                 for (i = 0; i < 4; i++)
                 {
+                    int b = indxx - 3;
                     for (j = 0; j < 4; j++)
                     {
-                        XOR = (Convert.ToInt32(mulMatrix[j, i], 16)) ^ (Convert.ToInt32(newFullKeyMatrix[j, indxx], 16));
-                        prevStateArray[j, i] = XOR.ToString("X");
+                        XOR = (Convert.ToInt32(prevStateArray[j, i], 16)) ^ (Convert.ToInt32(newFullKeyMatrix[j, b + i], 16));
+                        mulMatrix[j, i] = XOR.ToString("X");
 
-                        if (prevStateArray[j, i].Length == 1)
-                            prevStateArray[j, i] = "0" + prevStateArray[j, i];
+                        if (mulMatrix[j, i].Length == 1)
+                            mulMatrix[j, i] = "0" + mulMatrix[j, i];
+                        //Console.WriteLine(newFullKeyMatrix[j, b + i]);
                     }
-                    indxx--;
                 }
+                indxx -= 4;
+
+                if (x == 9)
+                {
+                    for (i = 0; i < 4; i++)
+                    {
+                        for (j = 0; j < 4; j++)
+                        {
+                            prevStateArray[j, i] = mulMatrix[j, i];
+                        }
+                    }
+                }
+                else
+                {
+
+                    #region Mix Columns
+                    //Mix Columns
+                    // Matrix multiplication
+
+                    prevStateArray = InvMixColumns(mulMatrix);
+
+                    for (z = 0; z < 4; z++)
+                    {
+                        for (w = 0; w < 4; w++)
+                        {
+                           Console.WriteLine($"mix : {mulMatrix[z, w]}");
+                        }
+                    }
+                    #endregion
+                }
+
             }
 
             char[] plainChar = new char[plainMatrix.Length];
@@ -410,25 +618,10 @@ namespace SecurityLibrary.AES
             }
             PT = "0x" + cipher;
 
+            Console.WriteLine(PT);
+
             return (PT);
         }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
         public override string Encrypt(string plainText, string key)
         {
@@ -459,7 +652,6 @@ namespace SecurityLibrary.AES
             string[,] mulMatrix = new string[4, 4];
 
 
-            // Prepare the key with the hexa values
             for (i = 0; i < 4; i++)
             {
                 for (j = 0; j < 4; j++)
@@ -470,16 +662,15 @@ namespace SecurityLibrary.AES
                 }
             }
 
-            //------------------------------------------------Key Expansion------------------------------------------------------------//
+            // Key Expansion
             for (k = 0; k < 10; k++)
             {
-                // Store the last column of the key
+
                 for (i = 0; i < 4; i++)
                 {
                     keyColumn[i] = keyMatrix[i, 3];
                 }
-                
-                // Rotate left/up
+
                 idx = 3;
                 nextTmp = keyColumn[3];
                 for (i = 3; i >= 0; i--)
@@ -495,7 +686,7 @@ namespace SecurityLibrary.AES
                 }
 
 
-                // Convert the SBOX to a 2D matrix
+
                 idx = 0;
                 for (i = 0; i < 16; i++)
                 {
@@ -506,7 +697,6 @@ namespace SecurityLibrary.AES
                     }
                 }
 
-                // Mapping values with SBOX
                 string ind1, ind2;
                 int idx1 = 0, idx2 = 0;
 
@@ -536,23 +726,22 @@ namespace SecurityLibrary.AES
                     idx2 = idx2 % 16;
 
                     keyColumn[i] = SBOXMatrix[idx1, idx2];
-
+                    
                 }
-
-                // XOR with constround
                 int hex1, hex2, newXORValue;
+                
                 for (i = 0; i < 4; i++)
                 {
                     hex1 = Convert.ToInt32(keyColumn[i], 16);
-                    hex2 = Convert.ToInt32(constantRound[i, constIdx], 16);
+                    hex2 = Convert.ToInt32(constantRound[i,constIdx], 16);
                     newXORValue = hex1 ^ hex2;
                     keyColumn[i] = newXORValue.ToString("X");
 
-                    // Handle single digit case
                     if (keyColumn[i].Length == 1)
                         keyColumn[i] = "0" + keyColumn[i];
                 }
                 constIdx++;
+     
 
 
                 int XORValue;
@@ -560,13 +749,11 @@ namespace SecurityLibrary.AES
                 {
                     for (j = 0; j < 4; j++)
                     {
-                        // W0 xor g(W3)
                         if (i == 0)
                         {
                             XORValue = (Convert.ToInt32(keyColumn[j], 16)) ^ (Convert.ToInt32(keyMatrix[j, 0], 16));
                             updatedKeyMatrix[j, i] = XORValue.ToString("X");
                         }
-                        //the rest
                         else
                         {
                             XORValue = (Convert.ToInt32(updatedKeyMatrix[j, i - 1], 16)) ^ (Convert.ToInt32(keyMatrix[j, i], 16));
@@ -574,8 +761,6 @@ namespace SecurityLibrary.AES
                         }
                         if (updatedKeyMatrix[j, i].Length == 1)
                             updatedKeyMatrix[j, i] = "0" + updatedKeyMatrix[j, i];
-
-                        // Store for the full W43 key
                         fullKeyMatrix[j, indx] = updatedKeyMatrix[j, i];
                     }
                     indx++;
@@ -590,14 +775,11 @@ namespace SecurityLibrary.AES
                 }
 
                 if (indx == 40)
-                    break;
+                     break; 
             }
-
-            //----------------------------------------------------Cipher Text generation-----------------------------------------------//
+//----------------------------------------------------Cipher Text generation-------------------------------------------------------------------//
             plainText = plainText.ToUpper();
             idx = 0;
-
-            // Store the last column of the key
             for (i = 0; i < 4; i++)
             {
                 for (j = 0; j < 4; j++)
@@ -616,9 +798,9 @@ namespace SecurityLibrary.AES
                 {
                     stateXORValue = (Convert.ToInt32(plainMatrix[j, i], 16)) ^ (Convert.ToInt32(initKeyMatrix[j, i], 16));
                     stateArray[j, i] = stateXORValue.ToString("X");
-
-                    if (stateArray[j, i].Length == 1)
-                        stateArray[j, i] = "0" + stateArray[j, i];
+                
+                if (stateArray[j, i].Length == 1)
+                    stateArray[j, i] = "0" + stateArray[j, i];
                 }
             }
 
@@ -629,8 +811,8 @@ namespace SecurityLibrary.AES
                     prevStateArray[j, i] = stateArray[j, i];
                 }
             }
-            //------------------------------------------------------Encryption Process----------------------------------------------------//
-
+            //----------------------------------------------------------------------------------------------------------------------------//
+            
             for (x = 0; x < 10; x++)
             {
                 mixColCnt++;
@@ -701,7 +883,7 @@ namespace SecurityLibrary.AES
                         tmp_1 = prevStateArray[i, idx];
                         prevStateArray[i, idx] = nextTmp_1;
                         nextTmp_1 = tmp_1;
-
+                       
                     }
 
                     if (i == 2 && count > 1 && flag1 == 1)
@@ -716,7 +898,6 @@ namespace SecurityLibrary.AES
                     else if (i == 3 && flag2 == 0)
                         i = 2;
                 }
-
 
                 if (x == 9)
                 {
@@ -753,12 +934,10 @@ namespace SecurityLibrary.AES
                                 }
                                 else if (mixValue == 2)
                                 {
-                                    // Shift -> Check MSB -> XOR with 1B/0
                                     multiplied = (stateValue << 1) ^ ((stateValue & 0x80) == 0x80 ? 0x1B : 0);
                                 }
                                 else // mixValue == 3
                                 {
-                                    // Shift -> Check MSB -> XOR with 1B/0 -> XOR with statevalue
                                     multiplied = ((stateValue << 1) ^ ((stateValue & 0x80) == 0x80 ? 0x1B : 0)) ^ stateValue;
                                 }
 
@@ -766,7 +945,7 @@ namespace SecurityLibrary.AES
 
                             }
                             // Format as a two-digit hexadecimal string
-                            mulMatrix[j, i] = (sum.ToString("X2"));
+                            mulMatrix[j, i] = (sum.ToString("X2")); 
                             if (mulMatrix[j, i].Length > 2)
                                 mulMatrix[j, i] = (sum.ToString("X2")).Substring(1, 2);
                         }
